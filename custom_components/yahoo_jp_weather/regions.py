@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
-import re
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 BASE_URL = "https://weather.yahoo.co.jp"
 
@@ -102,16 +102,40 @@ class _LinkParser(HTMLParser):
 def parse_location_url(url: str) -> tuple[str, str, str] | None:
     """Return prefecture, forecast-area, and municipality codes from a URL."""
     match = LOCATION_URL_PATTERN.fullmatch(url)
-    return match.groups() if match else None
+    if match is None:
+        return None
+    prefecture, forecast_area, municipality = match.groups()
+    return str(prefecture), str(forecast_area), str(municipality)
 
 
-def _parse_links(html: str, pattern: re.Pattern[str]) -> list[LocationOption]:
+def _normalize_yahoo_url(url: str, *, base_url: str) -> str | None:
+    parsed = urlsplit(urljoin(base_url, url))
+    if parsed.scheme != "https" or parsed.netloc != "weather.yahoo.co.jp":
+        return None
+    if not parsed.path.startswith("/weather/jp/") or not parsed.path.endswith(".html"):
+        return None
+    return urlunsplit(("https", "weather.yahoo.co.jp", parsed.path, "", ""))
+
+
+def validate_municipality_url(url: str) -> str:
+    """Return a canonical Yahoo municipality URL or reject unsafe input."""
+    normalized = _normalize_yahoo_url(url, base_url=f"{BASE_URL}/")
+    if normalized is None or parse_location_url(normalized) is None:
+        raise ValueError("URL must be a Yahoo! Japan Weather municipality page")
+    return normalized
+
+
+def _parse_links(
+    html: str, pattern: re.Pattern[str], *, page_url: str
+) -> list[LocationOption]:
     parser = _LinkParser()
     parser.feed(html)
     result: list[LocationOption] = []
     seen: set[str] = set()
     for href, parts in parser.links:
-        url = urljoin(BASE_URL, href)
+        url = _normalize_yahoo_url(href, base_url=page_url)
+        if url is None:
+            continue
         match = pattern.fullmatch(url)
         if not match or not parts:
             continue
@@ -128,7 +152,11 @@ def parse_forecast_areas(html: str, prefecture_code: str) -> list[LocationOption
     pattern = re.compile(
         rf"https://weather\.yahoo\.co\.jp/weather/jp/{re.escape(prefecture_code)}/(\d+)\.html"
     )
-    return _parse_links(html, pattern)
+    return _parse_links(
+        html,
+        pattern,
+        page_url=f"{BASE_URL}/weather/jp/{prefecture_code}/",
+    )
 
 
 def parse_municipalities(
@@ -139,4 +167,8 @@ def parse_municipalities(
         rf"https://weather\.yahoo\.co\.jp/weather/jp/{re.escape(prefecture_code)}/"
         rf"{re.escape(forecast_area_code)}/(\d+)\.html"
     )
-    return _parse_links(html, pattern)
+    return _parse_links(
+        html,
+        pattern,
+        page_url=(f"{BASE_URL}/weather/jp/{prefecture_code}/{forecast_area_code}.html"),
+    )

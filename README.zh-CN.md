@@ -18,6 +18,8 @@
 - 简体中文、日文、英文三语界面
 - 每 30 分钟更新一次
 - 保留旧版 URL/YAML 导入兼容性
+- 拒绝无效或过期的 Yahoo 页面，保留最后一次有效预报
+- 提供不含地区信息的 Home Assistant 诊断
 
 ## 安装
 
@@ -79,11 +81,31 @@ custom_components/yahoo_jp_weather
 - 请勿把 30 分钟更新间隔调得更短。
 - Yahoo 提供的地区名为日文；标准天气状态由 HA 自动本地化。
 
+## 可靠性、安全与隐私
+
+- 新增或重新配置市区町村时，集成会在保存配置项**之前**请求并解析最终天气页。验证失败时，原地区配置完全不变。
+- 旧版 URL、页面中发现的链接和最终天气页只允许使用 `weather.yahoo.co.jp` 上的 HTTPS 市区町村页面；跨站重定向会被拒绝。
+- 发布时间缺失或过旧、预报全部过期、预报表无有效数据或数值明显异常时，本次更新会失败并保留旧数据。
+- Home Assistant 每 30 分钟抓取时，Yahoo 可以看到您的公网 IP、所选市区町村页面、请求时间和集成 User-Agent。
+- 集成不会保存下载的完整 HTML。Home Assistant 诊断不会包含市区町村名称、来源 URL 或具体预报内容。
+
+## 故障排查
+
+1. 更新到最新集成版本并重启 Home Assistant。
+2. 打开“设置 → 设备与服务 → Yahoo! Japan Weather”，检查配置项是否显示重试或加载错误。
+3. 从配置项下载诊断。诊断包含更新状态和预报数量，但不包含所选地区。
+4. 检查 Home Assistant 日志中的 `yahoo_jp_weather`。解析错误可能表示 Yahoo 修改了网页结构，请提交已经脱敏的 Bug 报告。
+
 ## 开发测试
 
+详细说明参见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
 ```bash
-python3 -m unittest discover -s tests -v
-python3 -m compileall -q custom_components
+python -m pip install --requirement requirements-test.txt
+pytest -q --cov=custom_components.yahoo_jp_weather --cov-report=term-missing
+ruff check custom_components tests scripts
+ruff format --check custom_components tests scripts
+mypy custom_components/yahoo_jp_weather
 ```
 
 ## 许可证

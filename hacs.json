@@ -1,4 +1,6 @@
 {
+  "filename": "yahoo_jp_weather.zip",
   "name": "Yahoo! Japan Weather",
-  "render_readme": true
+  "render_readme": true,
+  "zip_release": true
 }

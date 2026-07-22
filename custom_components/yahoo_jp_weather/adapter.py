@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
+
+from homeassistant.components.weather import Forecast
 
 from .parser import DailyForecast, HourlyForecast
 
 
-def _without_none(data: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in data.items() if value is not None}
+def _without_none(data: dict[str, Any]) -> Forecast:
+    return cast(
+        Forecast, {key: value for key, value in data.items() if value is not None}
+    )
 
 
 def hourly_forecasts_for_ha(
     forecasts: list[HourlyForecast], *, now: datetime
-) -> list[dict[str, Any]]:
+) -> list[Forecast]:
     """Return active and future Yahoo three-hour slots in HA format."""
     cutoff = now - timedelta(hours=3)
     return [
@@ -37,7 +41,9 @@ def hourly_forecasts_for_ha(
 
 def daily_forecasts_for_ha(
     forecasts: list[DailyForecast],
-) -> list[dict[str, Any]]:
+    *,
+    now: datetime | None = None,
+) -> list[Forecast]:
     """Return Yahoo-derived daily slots in HA format."""
     return [
         _without_none(
@@ -51,4 +57,10 @@ def daily_forecasts_for_ha(
             }
         )
         for item in forecasts
+        if datetime.fromisoformat(item.datetime).date()
+        >= (
+            now.astimezone(datetime.fromisoformat(item.datetime).tzinfo)
+            if now is not None
+            else datetime.now(datetime.fromisoformat(item.datetime).tzinfo)
+        ).date()
     ]

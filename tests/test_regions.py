@@ -1,23 +1,13 @@
 from __future__ import annotations
 
-import sys
-import types
 import unittest
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-custom_components = types.ModuleType("custom_components")
-custom_components.__path__ = [str(ROOT / "custom_components")]
-component = types.ModuleType("custom_components.yahoo_jp_weather")
-component.__path__ = [str(ROOT / "custom_components" / "yahoo_jp_weather")]
-sys.modules.setdefault("custom_components", custom_components)
-sys.modules.setdefault("custom_components.yahoo_jp_weather", component)
 
 from custom_components.yahoo_jp_weather.regions import (
     PREFECTURES,
     parse_forecast_areas,
     parse_location_url,
     parse_municipalities,
+    validate_municipality_url,
 )
 
 
@@ -79,6 +69,33 @@ class RegionParserTests(unittest.TestCase):
             [("13101", "千代田区"), ("13123", "江戸川区")],
         )
         self.assertTrue(result[-1].url.endswith("/13/4410/13123.html"))
+
+    def test_parses_relative_forecast_area_links(self) -> None:
+        html = '<a href="4410.html?src=test#forecast">東京</a>'
+
+        result = parse_forecast_areas(html, "13")
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].code, "4410")
+        self.assertEqual(
+            result[0].url,
+            "https://weather.yahoo.co.jp/weather/jp/13/4410.html",
+        )
+
+    def test_validates_and_canonicalizes_municipality_urls(self) -> None:
+        self.assertEqual(
+            validate_municipality_url(
+                "https://weather.yahoo.co.jp/weather/jp/13/4410/13123.html?src=x#top"
+            ),
+            "https://weather.yahoo.co.jp/weather/jp/13/4410/13123.html",
+        )
+        for url in (
+            "http://weather.yahoo.co.jp/weather/jp/13/4410/13123.html",
+            "https://example.com/weather/jp/13/4410/13123.html",
+            "http://127.0.0.1/internal",
+        ):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                validate_municipality_url(url)
 
 
 if __name__ == "__main__":

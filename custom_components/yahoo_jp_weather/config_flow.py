@@ -7,10 +7,8 @@ from typing import Any
 
 import aiohttp
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.const import CONF_URL
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     SelectOptionDict,
@@ -19,7 +17,14 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
 )
 
-from .const import CONF_ENTITY_UNIQUE_ID, CONF_NAME, DOMAIN
+from .const import (
+    CONF_ENTITY_UNIQUE_ID,
+    CONF_NAME,
+    CONFIG_VERSION,
+    DOMAIN,
+    USER_AGENT,
+)
+from .parser import parse_weather_html
 from .regions import (
     BASE_URL,
     PREFECTURES,
@@ -57,7 +62,7 @@ def _selector(options: list[LocationOption] | dict[str, str]) -> SelectSelector:
 class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle Yahoo! Japan Weather configuration."""
 
-    VERSION = 1
+    VERSION = CONFIG_VERSION
 
     def __init__(self) -> None:
         self._prefecture_code: str | None = None
@@ -73,21 +78,26 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         session = async_get_clientsession(self.hass)
         async with session.get(
             url,
-            headers={"User-Agent": "HomeAssistant YahooJapanWeather/1.2"},
+            headers={"User-Agent": USER_AGENT},
             timeout=aiohttp.ClientTimeout(total=20),
+            allow_redirects=False,
         ) as response:
-            response.raise_for_status()
+            if response.status != 200:
+                response.raise_for_status()
+                raise aiohttp.ClientError(
+                    f"Unexpected Yahoo response status {response.status}"
+                )
             return await response.text(encoding="utf-8")
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> config_entries.ConfigFlowResult:
         """Select a prefecture."""
         return await self._async_step_prefecture("user", user_input)
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> config_entries.ConfigFlowResult:
         """Change the location of an existing config entry."""
         if self._reconfigure_entry is None:
             self._reconfigure_entry = self._get_reconfigure_entry()
@@ -102,7 +112,7 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _async_step_prefecture(
         self, step_id: str, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> config_entries.ConfigFlowResult:
         """Select a prefecture for setup or reconfiguration."""
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -115,7 +125,7 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     f"{BASE_URL}/weather/jp/{self._prefecture_code}/"
                 )
                 areas = parse_forecast_areas(html, self._prefecture_code)
-            except (aiohttp.ClientError, TimeoutError):
+            except aiohttp.ClientError, TimeoutError:
                 errors["base"] = "cannot_connect"
             else:
                 if not areas:
@@ -141,7 +151,7 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_forecast_area(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> config_entries.ConfigFlowResult:
         """Select a Yahoo forecast area."""
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -164,7 +174,7 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_municipality(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> config_entries.ConfigFlowResult:
         """Fetch and select a municipality."""
         if self._prefecture_code is None or self._forecast_area is None:
             return await self.async_step_user()
@@ -176,7 +186,7 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 municipalities = parse_municipalities(
                     html, self._prefecture_code, self._forecast_area.code
                 )
-            except (aiohttp.ClientError, TimeoutError):
+            except aiohttp.ClientError, TimeoutError:
                 errors["base"] = "cannot_connect"
             else:
                 if not municipalities:
@@ -186,6 +196,25 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None and self._municipalities:
             location = self._municipalities[user_input[CONF_MUNICIPALITY]]
+            try:
+                html = await self._async_fetch_html(location.url)
+                parse_weather_html(html)
+            except aiohttp.ClientError, TimeoutError:
+                errors["base"] = "cannot_connect"
+            except ValueError:
+                errors["base"] = "invalid_weather"
+            if errors:
+                return self.async_show_form(
+                    step_id="municipality",
+                    data_schema=vol.Schema(
+                        {
+                            vol.Required(
+                                CONF_MUNICIPALITY, default=location.code
+                            ): _selector(list(self._municipalities.values()))
+                        }
+                    ),
+                    errors=errors,
+                )
             if self._reconfigure_entry is not None:
                 duplicate = next(
                     (
@@ -241,7 +270,9 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_import(self, user_input: dict[str, Any]) -> FlowResult:
+    async def async_step_import(
+        self, user_input: dict[str, Any]
+    ) -> config_entries.ConfigFlowResult:
         """Import legacy YAML configuration."""
         unique_id = _unique_id(user_input[CONF_URL])
         await self.async_set_unique_id(unique_id)

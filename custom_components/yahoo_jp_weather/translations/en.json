@@ -32,6 +32,7 @@
     },
     "error": {
       "cannot_connect": "Unable to connect to Yahoo! Japan Weather.",
+      "invalid_weather": "The selected page did not contain valid current weather data. Your existing location was not changed.",
       "no_locations": "No selectable weather locations were found on this page.",
       "location_in_use": "The selected municipality is already used by another config entry."
     },

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, time
-from html.parser import HTMLParser
 import re
+import unicodedata
+from dataclasses import dataclass
+from datetime import datetime, time, timedelta
+from html.parser import HTMLParser
 from zoneinfo import ZoneInfo
 
 JST = ZoneInfo("Asia/Tokyo")
@@ -66,11 +67,39 @@ class WeatherData:
     daily: list[DailyForecast]
 
 
+VOID_ELEMENTS = {
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+}
+
+IGNORED_ELEMENTS = {"script", "style", "template", "noscript"}
+
+
 def map_condition(text: str) -> str | None:
     """Map Japanese Yahoo weather wording to a Home Assistant condition."""
     normalized = text.replace(" ", "").replace("　", "")
     if "雷" in normalized:
         return "lightning-rainy" if "雨" in normalized else "lightning"
+    if "雹" in normalized or "ひょう" in normalized:
+        return "hail"
+    if any(word in normalized for word in ("大雨", "豪雨", "暴雨")):
+        return "pouring"
+    if "雪" in normalized and "雨" in normalized:
+        return "snowy-rainy"
+    if "強風" in normalized or "暴風" in normalized:
+        return "windy-variant" if "曇" in normalized else "windy"
     if "雪" in normalized:
         return "snowy"
     if "雨" in normalized:
@@ -98,36 +127,55 @@ class _YahooTableParser(HTMLParser):
         self.heading_parts: list[str] | None = None
         self.title_parts: list[str] | None = None
         self.title = ""
-        self.page_parts: list[str] = []
+        self.pinpoint_depth: int | None = None
+        self.pinpoint_parts: list[str] = []
+        self.ignored_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self.depth += 1
+        if tag not in VOID_ELEMENTS:
+            self.depth += 1
+        if tag in IGNORED_ELEMENTS:
+            self.ignored_depth += 1
+            return
+        if self.ignored_depth:
+            return
         attrs_dict = dict(attrs)
         if tag == "title":
             self.title_parts = []
-        if tag == "div" and attrs_dict.get("id") in {
+        section_id = attrs_dict.get("id")
+        if section_id == "yjw_pinpoint":
+            self.pinpoint_depth = self.depth
+        if tag == "div" and section_id in {
             "yjw_pinpoint_today",
             "yjw_pinpoint_tomorrow",
             "yjw_week",
         }:
-            self.active_section = attrs_dict["id"]
+            assert section_id is not None
+            self.active_section = section_id
             self.section_depth = self.depth
-            self.sections[self.active_section] = {"heading": "", "rows": []}
+            self.sections[section_id] = {"heading": "", "rows": []}
         if self.active_section:
             if tag == "h3":
                 self.heading_parts = []
             elif tag == "tr":
                 self.current_row = []
-            elif tag == "td" and self.current_row is not None:
+            elif tag in {"td", "th"} and self.current_row is not None:
                 self.current_cell = []
 
     def handle_endtag(self, tag: str) -> None:
+        if tag in VOID_ELEMENTS:
+            return
+        if self.ignored_depth:
+            if tag in IGNORED_ELEMENTS:
+                self.ignored_depth -= 1
+            self.depth -= 1
+            return
         if tag == "title":
             self.title = "".join(self.title_parts or [])
             self.title_parts = None
         if self.active_section:
             section = self.sections[self.active_section]
-            if tag == "td" and self.current_cell is not None:
+            if tag in {"td", "th"} and self.current_cell is not None:
                 assert self.current_row is not None
                 self.current_row.append(self.current_cell)
                 self.current_cell = None
@@ -142,13 +190,18 @@ class _YahooTableParser(HTMLParser):
             if tag == "div" and self.depth == self.section_depth:
                 self.active_section = None
                 self.section_depth = None
+        if self.depth == self.pinpoint_depth:
+            self.pinpoint_depth = None
         self.depth -= 1
 
     def handle_data(self, data: str) -> None:
+        if self.ignored_depth:
+            return
         text = data.strip()
         if not text:
             return
-        self.page_parts.append(text)
+        if self.pinpoint_depth is not None:
+            self.pinpoint_parts.append(text)
         if self.title_parts is not None:
             self.title_parts.append(text)
         if self.heading_parts is not None:
@@ -175,9 +228,32 @@ def _row_map(rows: list[list[list[str]]]) -> dict[str, list[list[str]]]:
     for row in rows:
         if not row:
             continue
-        label = "".join(row[0]).replace(" ", "").replace("　", "")
+        label = unicodedata.normalize("NFKC", "".join(row[0]))
+        label = label.replace(" ", "").replace("　", "")
         result[label] = row[1:]
     return result
+
+
+def _row_containing(rows: dict[str, list[list[str]]], *terms: str) -> list[list[str]]:
+    return next(
+        (values for key, values in rows.items() if all(term in key for term in terms)),
+        [],
+    )
+
+
+def _wind(parts: list[str] | None) -> tuple[float | None, float | None]:
+    if not parts:
+        return None, None
+    text = unicodedata.normalize("NFKC", " ".join(parts))
+    direction = next(
+        (name for name in sorted(WIND_BEARINGS, key=len, reverse=True) if name in text),
+        None,
+    )
+    bearing = WIND_BEARINGS[direction] if direction is not None else None
+    if "静穏" in text:
+        return bearing, 0.0
+    speed_text = text.replace(direction, "", 1) if direction else text
+    return bearing, _number([speed_text])
 
 
 def _value(values: list[list[str]], index: int) -> list[str] | None:
@@ -196,7 +272,7 @@ def parse_weather_html(html: str, *, now: datetime | None = None) -> WeatherData
     """Parse Yahoo! Japan pinpoint weather HTML."""
     parser = _YahooTableParser()
     parser.feed(html)
-    page_text = " ".join(parser.page_parts)
+    page_text = " ".join(parser.pinpoint_parts)
 
     title_match = re.search(r"([^<>]+?)の天気\s*-\s*Yahoo", parser.title)
     area_name = title_match.group(1).strip() if title_match else "Yahoo! Japan"
@@ -206,13 +282,16 @@ def parse_weather_html(html: str, *, now: datetime | None = None) -> WeatherData
         page_text,
     )
     if published_match:
-        published = datetime(
-            *(int(value) for value in published_match.groups()), tzinfo=JST
-        )
+        year, month, day, hour, minute = map(int, published_match.groups())
+        published = datetime(year, month, day, hour, minute, tzinfo=JST)
         published_at: str | None = published.isoformat()
     else:
-        published = (now or datetime.now(JST)).astimezone(JST)
-        published_at = None
+        raise ValueError("Yahoo weather publication timestamp was not found")
+
+    now_jst = (now or datetime.now(JST)).astimezone(JST)
+    publication_age = now_jst - published
+    if publication_age > timedelta(hours=18) or publication_age < timedelta(hours=-1):
+        raise ValueError("Yahoo weather page is stale")
 
     hourly: list[HourlyForecast] = []
     for section in parser.sections.values():
@@ -227,13 +306,10 @@ def parse_weather_html(html: str, *, now: datetime | None = None) -> WeatherData
         rows = _row_map(rows_obj)
         times = rows.get("時刻", [])
         conditions = rows.get("天気", [])
-        temperatures = rows.get("気温（℃）", [])
-        humidities = rows.get("湿度（％）", [])
-        precipitation = rows.get("降水量（mm）", [])
-        winds = next(
-            (values for key, values in rows.items() if "風向" in key and "風速" in key),
-            [],
-        )
+        temperatures = _row_containing(rows, "気温")
+        humidities = _row_containing(rows, "湿度")
+        precipitation = _row_containing(rows, "降水量")
+        winds = _row_containing(rows, "風向", "風速")
         for index, time_parts in enumerate(times):
             hour_value = _number(time_parts)
             if hour_value is None:
@@ -245,9 +321,7 @@ def parse_weather_html(html: str, *, now: datetime | None = None) -> WeatherData
             )
             condition_parts = _value(conditions, index) or []
             wind_parts = _value(winds, index) or []
-            wind_direction = next(
-                (part for part in wind_parts if part in WIND_BEARINGS), None
-            )
+            wind_bearing, wind_speed = _wind(wind_parts)
             hourly.append(
                 HourlyForecast(
                     datetime=slot_time.isoformat(),
@@ -255,18 +329,39 @@ def parse_weather_html(html: str, *, now: datetime | None = None) -> WeatherData
                     temperature=_number(_value(temperatures, index)),
                     humidity=_number(_value(humidities, index)),
                     precipitation=_number(_value(precipitation, index)),
-                    wind_bearing=WIND_BEARINGS.get(wind_direction),
-                    wind_speed=_number(
-                        [part for part in wind_parts if part != wind_direction]
-                    ),
+                    wind_bearing=wind_bearing,
+                    wind_speed=wind_speed,
                 )
             )
 
     if not hourly:
         raise ValueError("Yahoo forecast tables were not found")
+    for item in hourly:
+        ranges = (
+            ("temperature", item.temperature, -100, 70),
+            ("humidity", item.humidity, 0, 100),
+            ("precipitation", item.precipitation, 0, 500),
+            ("wind speed", item.wind_speed, 0, 150),
+        )
+        for field, value, minimum, maximum in ranges:
+            if value is not None and not minimum <= value <= maximum:
+                raise ValueError(f"Yahoo weather {field} is outside the valid range")
+    if not any(
+        item.condition is not None or item.temperature is not None for item in hourly
+    ):
+        raise ValueError("Yahoo forecast did not contain usable weather fields")
     hourly.sort(key=lambda item: item.datetime)
+    if any(
+        datetime.fromisoformat(item.datetime) > now_jst + timedelta(hours=48)
+        for item in hourly
+    ):
+        raise ValueError("Yahoo hourly forecast exceeds the expected horizon")
+    if not any(
+        datetime.fromisoformat(item.datetime) > now_jst - timedelta(hours=3)
+        for item in hourly
+    ):
+        raise ValueError("Yahoo hourly forecast slots are expired")
 
-    now_jst = (now or datetime.now(JST)).astimezone(JST)
     past = [item for item in hourly if datetime.fromisoformat(item.datetime) <= now_jst]
     current = past[-1] if past else hourly[0]
 
@@ -274,7 +369,7 @@ def parse_weather_html(html: str, *, now: datetime | None = None) -> WeatherData
     for item in hourly:
         grouped.setdefault(item.datetime[:10], []).append(item)
     daily: list[DailyForecast] = []
-    for day, items in grouped.items():
+    for day_key, items in grouped.items():
         temperatures_for_day = [
             item.temperature for item in items if item.temperature is not None
         ]
@@ -292,14 +387,14 @@ def parse_weather_html(html: str, *, now: datetime | None = None) -> WeatherData
         daily.append(
             DailyForecast(
                 datetime=datetime.combine(
-                    datetime.fromisoformat(day).date(), time(0), tzinfo=JST
+                    datetime.fromisoformat(day_key).date(), time(0), tzinfo=JST
                 ).isoformat(),
                 condition=noon.condition,
                 temperature=max(temperatures_for_day) if temperatures_for_day else None,
                 temperature_low=min(temperatures_for_day)
                 if temperatures_for_day
                 else None,
-                precipitation=sum(precipitation_for_day)
+                precipitation=round(sum(precipitation_for_day), 2)
                 if precipitation_for_day
                 else None,
             )
@@ -312,22 +407,26 @@ def parse_weather_html(html: str, *, now: datetime | None = None) -> WeatherData
         rows = _row_map(rows_obj)
         dates = rows.get("日付", [])
         conditions = rows.get("天気", [])
-        temperatures = rows.get("気温（℃）", [])
-        probabilities = next(
-            (values for key, values in rows.items() if "降水" in key and "確率" in key),
-            [],
-        )
+        temperatures = _row_containing(rows, "気温")
+        probabilities = _row_containing(rows, "降水", "確率")
         existing_days = {item.datetime[:10] for item in daily}
         for index, date_parts in enumerate(dates):
             date_match = re.search(r"(\d{1,2})月(\d{1,2})日", "".join(date_parts))
             if not date_match:
                 continue
-            month, day = (int(value) for value in date_match.groups())
+            month, day_of_month = (int(value) for value in date_match.groups())
             year = _forecast_year(published, month)
-            date_value = datetime(year, month, day, tzinfo=JST)
+            date_value = datetime(year, month, day_of_month, tzinfo=JST)
             if date_value.date().isoformat() in existing_days:
                 continue
             temp_values = _numbers(_value(temperatures, index))
+            if any(not -100 <= value <= 70 for value in temp_values):
+                raise ValueError("Yahoo weekly temperature is outside the valid range")
+            probability = _number(_value(probabilities, index))
+            if probability is not None and not 0 <= probability <= 100:
+                raise ValueError(
+                    "Yahoo weekly precipitation probability is outside the valid range"
+                )
             daily.append(
                 DailyForecast(
                     datetime=date_value.isoformat(),
@@ -335,7 +434,7 @@ def parse_weather_html(html: str, *, now: datetime | None = None) -> WeatherData
                     temperature=temp_values[0] if temp_values else None,
                     temperature_low=temp_values[1] if len(temp_values) > 1 else None,
                     precipitation=None,
-                    precipitation_probability=_number(_value(probabilities, index)),
+                    precipitation_probability=probability,
                 )
             )
 
