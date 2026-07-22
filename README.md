@@ -18,6 +18,8 @@ An unofficial Home Assistant custom integration that reads municipal forecasts f
 - English, Japanese, and Simplified Chinese UI translations
 - 30-minute polling interval
 - Existing legacy URL-based YAML imports remain compatible
+- Invalid or stale Yahoo pages are rejected instead of replacing the last valid forecast
+- Privacy-safe Home Assistant diagnostics
 
 ## Installation
 
@@ -79,13 +81,31 @@ The “current” temperature is forecast data, not a local weather-station obse
 - Do not reduce the 30-minute polling interval.
 - Weather descriptions and municipality names are provided by Yahoo in Japanese; standard HA weather states are localized by Home Assistant.
 
+## Reliability, security, and privacy
+
+- A new or reconfigured municipality is fetched and parsed **before** the config entry is saved. If validation fails, the existing location remains unchanged.
+- Legacy URLs, discovered links, and final weather pages are restricted to HTTPS municipality pages on `weather.yahoo.co.jp`. Cross-site redirects are rejected.
+- The parser rejects missing or stale publication timestamps, expired forecasts, unusable forecast tables, and implausible numeric values.
+- Yahoo can observe your public IP address, selected municipality page, request time, and the integration User-Agent when Home Assistant polls every 30 minutes.
+- Downloaded HTML is not stored. Home Assistant diagnostics omit the municipality name, source URL, and forecast contents.
+
+## Troubleshooting
+
+1. Update to the latest integration release and restart Home Assistant.
+2. Open **Settings → Devices & services → Yahoo! Japan Weather** and check whether the config entry reports a retry or setup error.
+3. Download diagnostics from the config entry. They contain update status and forecast counts but intentionally exclude the selected location.
+4. Check Home Assistant logs for `yahoo_jp_weather`. A parser error may indicate that Yahoo changed its page structure; please submit a redacted bug report.
+
 ## Development
 
-Run the local tests with:
+See [CONTRIBUTING.md](CONTRIBUTING.md). The full local quality gate is:
 
 ```bash
-python3 -m unittest discover -s tests -v
-python3 -m compileall -q custom_components
+python -m pip install --requirement requirements-test.txt
+pytest -q --cov=custom_components.yahoo_jp_weather --cov-report=term-missing
+ruff check custom_components tests scripts
+ruff format --check custom_components tests scripts
+mypy custom_components/yahoo_jp_weather
 ```
 
 ## License

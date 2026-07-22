@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.weather import (
     Forecast,
     SingleCoordinatorWeatherEntity,
     WeatherEntityFeature,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_URL,
     UnitOfPrecipitationDepth,
@@ -25,14 +24,16 @@ from .adapter import daily_forecasts_for_ha, hourly_forecasts_for_ha
 from .const import CONF_ENTITY_UNIQUE_ID, DOMAIN
 from .coordinator import YahooJapanWeatherCoordinator
 
+if TYPE_CHECKING:
+    from . import YahooConfigEntry
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: YahooConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    coordinator: YahooJapanWeatherCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([YahooJapanWeatherEntity(coordinator, entry)])
+    async_add_entities([YahooJapanWeatherEntity(entry.runtime_data, entry)])
 
 
 class YahooJapanWeatherEntity(
@@ -51,7 +52,7 @@ class YahooJapanWeatherEntity(
     _attr_attribution = "Weather data provided by Yahoo! JAPAN"
 
     def __init__(
-        self, coordinator: YahooJapanWeatherCoordinator, entry: ConfigEntry
+        self, coordinator: YahooJapanWeatherCoordinator, entry: YahooConfigEntry
     ) -> None:
         super().__init__(coordinator=coordinator)
         self._attr_unique_id = entry.data.get(
@@ -89,7 +90,6 @@ class YahooJapanWeatherEntity(
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "published_at": self.coordinator.data.published_at,
-            "source_url": self.coordinator.url,
             "forecast_interval_hours": 3,
         }
 
@@ -99,4 +99,4 @@ class YahooJapanWeatherEntity(
 
     @callback
     def _async_forecast_daily(self) -> list[Forecast] | None:
-        return daily_forecasts_for_ha(self.coordinator.data.daily)
+        return daily_forecasts_for_ha(self.coordinator.data.daily, now=dt_util.now())

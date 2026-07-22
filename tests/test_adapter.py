@@ -1,20 +1,8 @@
 from __future__ import annotations
 
-import sys
-import types
 import unittest
 from datetime import datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-custom_components = types.ModuleType("custom_components")
-custom_components.__path__ = [str(ROOT / "custom_components")]
-component = types.ModuleType("custom_components.yahoo_jp_weather")
-component.__path__ = [str(ROOT / "custom_components" / "yahoo_jp_weather")]
-sys.modules.setdefault("custom_components", custom_components)
-sys.modules.setdefault("custom_components.yahoo_jp_weather", component)
 
 from custom_components.yahoo_jp_weather.adapter import (
     daily_forecasts_for_ha,
@@ -79,7 +67,8 @@ class HomeAssistantAdapterTests(unittest.TestCase):
             )
         ]
 
-        result = daily_forecasts_for_ha(days)
+        now = datetime(2026, 7, 22, 12, 0, tzinfo=ZoneInfo("Asia/Tokyo"))
+        result = daily_forecasts_for_ha(days, now=now)
 
         self.assertEqual(
             result[0],
@@ -91,6 +80,29 @@ class HomeAssistantAdapterTests(unittest.TestCase):
                 "native_precipitation": 0.3,
             },
         )
+
+    def test_filters_expired_daily_forecasts(self) -> None:
+        days = [
+            DailyForecast(
+                datetime="2026-07-21T00:00:00+09:00",
+                condition="rainy",
+                temperature=None,
+                temperature_low=None,
+                precipitation=None,
+            ),
+            DailyForecast(
+                datetime="2026-07-22T00:00:00+09:00",
+                condition="sunny",
+                temperature=None,
+                temperature_low=None,
+                precipitation=None,
+            ),
+        ]
+        now = datetime(2026, 7, 22, 12, 0, tzinfo=ZoneInfo("Asia/Tokyo"))
+
+        result = daily_forecasts_for_ha(days, now=now)
+
+        self.assertEqual([item["datetime"] for item in result], [days[1].datetime])
 
 
 if __name__ == "__main__":

@@ -2,35 +2,64 @@ name: Validate
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  tests:
+  quality:
+    name: Quality and tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
-          python-version: "3.13"
-      - name: Run unit tests
-        run: python -m unittest discover -s tests -v
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements-test.txt
+      - name: Install test dependencies
+        run: python -m pip install --requirement requirements-test.txt
+      - name: Ruff lint
+        run: ruff check custom_components tests scripts
+      - name: Ruff format
+        run: ruff format --check custom_components tests scripts
+      - name: Type check
+        run: mypy custom_components/yahoo_jp_weather
+      - name: Tests and coverage
+        run: pytest -q --cov=custom_components.yahoo_jp_weather --cov-report=term-missing
       - name: Compile Python sources
-        run: python -m compileall -q custom_components
+        run: python -m compileall -q custom_components tests scripts
+      - name: Validate JSON
+        run: |
+          python -m json.tool hacs.json >/dev/null
+          python -m json.tool custom_components/yahoo_jp_weather/manifest.json >/dev/null
+          python -m json.tool custom_components/yahoo_jp_weather/strings.json >/dev/null
+          for file in custom_components/yahoo_jp_weather/translations/*.json; do
+            python -m json.tool "$file" >/dev/null
+          done
 
   hacs:
+    name: HACS validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hacs/action@main
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
         with:
           category: integration
 
   hassfest:
+    name: Hassfest validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: home-assistant/actions/hassfest@master
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: home-assistant/actions/hassfest@e3fb68ebda13d88a0d695082f471ba2c83d025fb

@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/validate.yml
+
+  release:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Verify tag commit is on main
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: Verify tag matches manifest
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION=$(python -c 'import json; print(json.load(open("custom_components/yahoo_jp_weather/manifest.json"))["version"])')
+          test "$TAG" = "v$VERSION"
+      - name: Build HACS release archive
+        run: |
+          python -c 'import shutil; shutil.make_archive("yahoo_jp_weather", "zip", "custom_components/yahoo_jp_weather")'
+          sha256sum yahoo_jp_weather.zip > yahoo_jp_weather.zip.sha256
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" yahoo_jp_weather.zip yahoo_jp_weather.zip.sha256 \
+            --generate-notes --verify-tag
