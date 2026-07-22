@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Yahoo! Japan Weather",
+        "description": "Select the prefecture for the weather forecast.",
+        "data": {
+          "prefecture": "Prefecture"
+        }
+      },
+      "forecast_area": {
+        "title": "Select forecast area",
+        "description": "Select a Yahoo! Japan forecast area.",
+        "data": {
+          "forecast_area": "Forecast area"
+        }
+      },
+      "municipality": {
+        "title": "Select municipality",
+        "description": "Select the city, ward, town, or village to add.",
+        "data": {
+          "municipality": "Municipality"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to Yahoo! Japan Weather.",
+      "no_locations": "No selectable weather locations were found on this page."
+    },
+    "abort": {
+      "already_configured": "This Yahoo! Japan weather area is already configured."
+    }
+  },
+  "entity": {
+    "weather": {
+      "forecast": {
+        "name": "Yahoo! Japan Weather"
+      }
+    }
+  }
+}

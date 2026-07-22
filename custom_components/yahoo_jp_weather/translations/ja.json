@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Yahoo!天気",
+        "description": "天気予報を追加する都道府県を選択してください。",
+        "data": {
+          "prefecture": "都道府県"
+        }
+      },
+      "forecast_area": {
+        "title": "予報地域を選択",
+        "description": "Yahoo!天気の予報地域を選択してください。",
+        "data": {
+          "forecast_area": "予報地域"
+        }
+      },
+      "municipality": {
+        "title": "市区町村を選択",
+        "description": "追加する市区町村を選択してください。",
+        "data": {
+          "municipality": "市区町村"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Yahoo!天気に接続できません。",
+      "no_locations": "選択可能な地域が見つかりませんでした。"
+    },
+    "abort": {
+      "already_configured": "このYahoo!天気の地域はすでに設定されています。"
+    }
+  },
+  "entity": {
+    "weather": {
+      "forecast": {
+        "name": "Yahoo!天気"
+      }
+    }
+  }
+}

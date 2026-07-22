@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Yahoo!日本天气",
+        "description": "请选择要添加天气预报的都道府县。",
+        "data": {
+          "prefecture": "都道府县"
+        }
+      },
+      "forecast_area": {
+        "title": "选择预报地区",
+        "description": "请选择 Yahoo!日本天气的预报地区。",
+        "data": {
+          "forecast_area": "预报地区"
+        }
+      },
+      "municipality": {
+        "title": "选择市区町村",
+        "description": "请选择要添加的市、区、町或村。",
+        "data": {
+          "municipality": "市区町村"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "无法连接 Yahoo!日本天气。",
+      "no_locations": "该页面没有找到可选择的天气地区。"
+    },
+    "abort": {
+      "already_configured": "该 Yahoo!日本天气地区已经配置。"
+    }
+  },
+  "entity": {
+    "weather": {
+      "forecast": {
+        "name": "Yahoo!日本天气"
+      }
+    }
+  }
+}
