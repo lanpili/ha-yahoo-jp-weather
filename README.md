@@ -9,6 +9,7 @@ An unofficial Home Assistant custom integration that reads municipal forecasts f
 ## Features
 
 - Guided location setup: **prefecture → forecast area → municipality**
+- Reconfigure the location later without changing the existing weather entity ID
 - No API key required
 - Current condition based on the nearest Yahoo three-hour forecast slot
 - Three-hour forecasts with temperature, humidity, precipitation, wind direction, and wind speed
@@ -55,6 +56,8 @@ Then restart Home Assistant.
 4. Select a prefecture, forecast area, and municipality.
 
 The integration creates one `weather.*` entity for each municipality. Additional locations can be added by running the configuration flow again.
+
+To change an existing location, open the integration's config-entry menu and select **Reconfigure**. The current selections are prefilled, and the existing entity ID is preserved.
 
 ## Forecast data
 

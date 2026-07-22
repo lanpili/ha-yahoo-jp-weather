@@ -21,14 +21,23 @@
         "data": {
           "municipality": "Municipality"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure location",
+        "description": "Select a new prefecture for this weather entity.",
+        "data": {
+          "prefecture": "Prefecture"
+        }
       }
     },
     "error": {
       "cannot_connect": "Unable to connect to Yahoo! Japan Weather.",
-      "no_locations": "No selectable weather locations were found on this page."
+      "no_locations": "No selectable weather locations were found on this page.",
+      "location_in_use": "The selected municipality is already used by another config entry."
     },
     "abort": {
-      "already_configured": "This Yahoo! Japan weather area is already configured."
+      "already_configured": "This Yahoo! Japan weather area is already configured.",
+      "reconfigure_successful": "The weather location was updated successfully."
     }
   },
   "entity": {

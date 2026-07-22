@@ -19,12 +19,13 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
 )
 
-from .const import CONF_NAME, DOMAIN
+from .const import CONF_ENTITY_UNIQUE_ID, CONF_NAME, DOMAIN
 from .regions import (
     BASE_URL,
     PREFECTURES,
     LocationOption,
     parse_forecast_areas,
+    parse_location_url,
     parse_municipalities,
 )
 
@@ -63,12 +64,16 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._forecast_areas: dict[str, LocationOption] = {}
         self._forecast_area: LocationOption | None = None
         self._municipalities: dict[str, LocationOption] = {}
+        self._reconfigure_entry: config_entries.ConfigEntry | None = None
+        self._default_prefecture = "13"
+        self._default_forecast_area: str | None = None
+        self._default_municipality: str | None = None
 
     async def _async_fetch_html(self, url: str) -> str:
         session = async_get_clientsession(self.hass)
         async with session.get(
             url,
-            headers={"User-Agent": "HomeAssistant YahooJapanWeather/1.1"},
+            headers={"User-Agent": "HomeAssistant YahooJapanWeather/1.2"},
             timeout=aiohttp.ClientTimeout(total=20),
         ) as response:
             response.raise_for_status()
@@ -78,9 +83,33 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Select a prefecture."""
+        return await self._async_step_prefecture("user", user_input)
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Change the location of an existing config entry."""
+        if self._reconfigure_entry is None:
+            self._reconfigure_entry = self._get_reconfigure_entry()
+            current = parse_location_url(self._reconfigure_entry.data[CONF_URL])
+            if current is not None:
+                (
+                    self._default_prefecture,
+                    self._default_forecast_area,
+                    self._default_municipality,
+                ) = current
+        return await self._async_step_prefecture("reconfigure", user_input)
+
+    async def _async_step_prefecture(
+        self, step_id: str, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Select a prefecture for setup or reconfiguration."""
         errors: dict[str, str] = {}
         if user_input is not None:
             self._prefecture_code = user_input[CONF_PREFECTURE]
+            self._forecast_areas = {}
+            self._forecast_area = None
+            self._municipalities = {}
             try:
                 html = await self._async_fetch_html(
                     f"{BASE_URL}/weather/jp/{self._prefecture_code}/"
@@ -99,9 +128,13 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     return await self.async_step_forecast_area()
 
         return self.async_show_form(
-            step_id="user",
+            step_id=step_id,
             data_schema=vol.Schema(
-                {vol.Required(CONF_PREFECTURE, default="13"): _selector(PREFECTURES)}
+                {
+                    vol.Required(
+                        CONF_PREFECTURE, default=self._default_prefecture
+                    ): _selector(PREFECTURES)
+                }
             ),
             errors=errors,
         )
@@ -113,15 +146,18 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             self._forecast_area = self._forecast_areas[user_input[CONF_FORECAST_AREA]]
+            self._municipalities = {}
             return await self.async_step_municipality()
+        default = self._default_forecast_area
+        field = (
+            vol.Required(CONF_FORECAST_AREA, default=default)
+            if default in self._forecast_areas
+            else vol.Required(CONF_FORECAST_AREA)
+        )
         return self.async_show_form(
             step_id="forecast_area",
             data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_FORECAST_AREA): _selector(
-                        list(self._forecast_areas.values())
-                    )
-                }
+                {field: _selector(list(self._forecast_areas.values()))}
             ),
             errors=errors,
         )
@@ -150,27 +186,67 @@ class YahooJapanWeatherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None and self._municipalities:
             location = self._municipalities[user_input[CONF_MUNICIPALITY]]
-            await self.async_set_unique_id(location.code)
-            self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title=location.name,
-                data={CONF_NAME: location.name, CONF_URL: location.url},
-            )
+            if self._reconfigure_entry is not None:
+                duplicate = next(
+                    (
+                        entry
+                        for entry in self.hass.config_entries.async_entries(DOMAIN)
+                        if entry.entry_id != self._reconfigure_entry.entry_id
+                        and entry.unique_id == location.code
+                    ),
+                    None,
+                )
+                if duplicate is not None:
+                    errors["base"] = "location_in_use"
+                else:
+                    stable_id = self._reconfigure_entry.data.get(
+                        CONF_ENTITY_UNIQUE_ID,
+                        self._reconfigure_entry.unique_id
+                        or self._reconfigure_entry.entry_id,
+                    )
+                    return self.async_update_reload_and_abort(
+                        self._reconfigure_entry,
+                        unique_id=location.code,
+                        title=location.name,
+                        data={
+                            **self._reconfigure_entry.data,
+                            CONF_ENTITY_UNIQUE_ID: stable_id,
+                            CONF_NAME: location.name,
+                            CONF_URL: location.url,
+                        },
+                    )
+            else:
+                await self.async_set_unique_id(location.code)
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title=location.name,
+                    data={
+                        CONF_ENTITY_UNIQUE_ID: location.code,
+                        CONF_NAME: location.name,
+                        CONF_URL: location.url,
+                    },
+                )
 
+        default = self._default_municipality
+        field = (
+            vol.Required(CONF_MUNICIPALITY, default=default)
+            if default in self._municipalities
+            else vol.Required(CONF_MUNICIPALITY)
+        )
         return self.async_show_form(
             step_id="municipality",
             data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_MUNICIPALITY): _selector(
-                        list(self._municipalities.values())
-                    )
-                }
+                {field: _selector(list(self._municipalities.values()))}
             ),
             errors=errors,
         )
 
     async def async_step_import(self, user_input: dict[str, Any]) -> FlowResult:
         """Import legacy YAML configuration."""
-        await self.async_set_unique_id(_unique_id(user_input[CONF_URL]))
+        unique_id = _unique_id(user_input[CONF_URL])
+        await self.async_set_unique_id(unique_id)
         self._abort_if_unique_id_configured()
-        return self.async_create_entry(title=user_input[CONF_NAME], data=user_input)
+        return self.async_create_entry(
+            title=user_input[CONF_NAME],
+            data={**user_input, CONF_ENTITY_UNIQUE_ID: unique_id},
+        )

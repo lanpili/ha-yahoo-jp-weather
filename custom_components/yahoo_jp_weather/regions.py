@@ -9,6 +9,10 @@ from urllib.parse import urljoin
 
 BASE_URL = "https://weather.yahoo.co.jp"
 
+LOCATION_URL_PATTERN = re.compile(
+    r"https://weather\.yahoo\.co\.jp/weather/jp/(\d+)/(\d+)/(\d+)\.html"
+)
+
 PREFECTURES: dict[str, str] = {
     "01": "北海道",
     "02": "青森県",
@@ -93,6 +97,12 @@ class _LinkParser(HTMLParser):
             self.links.append((self.href, self.parts.copy()))
             self.href = None
             self.parts = []
+
+
+def parse_location_url(url: str) -> tuple[str, str, str] | None:
+    """Return prefecture, forecast-area, and municipality codes from a URL."""
+    match = LOCATION_URL_PATTERN.fullmatch(url)
+    return match.groups() if match else None
 
 
 def _parse_links(html: str, pattern: re.Pattern[str]) -> list[LocationOption]:

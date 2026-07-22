@@ -16,11 +16,21 @@ sys.modules.setdefault("custom_components.yahoo_jp_weather", component)
 from custom_components.yahoo_jp_weather.regions import (
     PREFECTURES,
     parse_forecast_areas,
+    parse_location_url,
     parse_municipalities,
 )
 
 
 class RegionParserTests(unittest.TestCase):
+    def test_parses_location_codes_from_municipality_url(self) -> None:
+        self.assertEqual(
+            parse_location_url(
+                "https://weather.yahoo.co.jp/weather/jp/13/4410/13123.html"
+            ),
+            ("13", "4410", "13123"),
+        )
+        self.assertIsNone(parse_location_url("https://example.com/not-yahoo"))
+
     def test_has_all_japanese_prefectures(self) -> None:
         self.assertEqual(len(PREFECTURES), 47)
         self.assertEqual(PREFECTURES["13"], "東京都")

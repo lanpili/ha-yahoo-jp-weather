@@ -22,7 +22,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .adapter import daily_forecasts_for_ha, hourly_forecasts_for_ha
-from .const import DOMAIN
+from .const import CONF_ENTITY_UNIQUE_ID, DOMAIN
 from .coordinator import YahooJapanWeatherCoordinator
 
 
@@ -54,7 +54,9 @@ class YahooJapanWeatherEntity(
         self, coordinator: YahooJapanWeatherCoordinator, entry: ConfigEntry
     ) -> None:
         super().__init__(coordinator=coordinator)
-        self._attr_unique_id = entry.unique_id or entry.entry_id
+        self._attr_unique_id = entry.data.get(
+            CONF_ENTITY_UNIQUE_ID, entry.unique_id or entry.entry_id
+        )
         self._attr_device_info = DeviceInfo(
             entry_type=DeviceEntryType.SERVICE,
             identifiers={(DOMAIN, self._attr_unique_id)},

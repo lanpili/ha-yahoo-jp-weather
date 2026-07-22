@@ -21,14 +21,23 @@
         "data": {
           "municipality": "市区町村"
         }
+      },
+      "reconfigure": {
+        "title": "地域を再設定",
+        "description": "この天気エンティティで使用する新しい都道府県を選択してください。",
+        "data": {
+          "prefecture": "都道府県"
+        }
       }
     },
     "error": {
       "cannot_connect": "Yahoo!天気に接続できません。",
-      "no_locations": "選択可能な地域が見つかりませんでした。"
+      "no_locations": "選択可能な地域が見つかりませんでした。",
+      "location_in_use": "選択した市区町村は別の設定で使用されています。"
     },
     "abort": {
-      "already_configured": "このYahoo!天気の地域はすでに設定されています。"
+      "already_configured": "このYahoo!天気の地域はすでに設定されています。",
+      "reconfigure_successful": "天気の地域を更新しました。"
     }
   },
   "entity": {

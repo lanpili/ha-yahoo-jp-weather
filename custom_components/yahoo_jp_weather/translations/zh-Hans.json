@@ -21,14 +21,23 @@
         "data": {
           "municipality": "市区町村"
         }
+      },
+      "reconfigure": {
+        "title": "重新选择地区",
+        "description": "请选择该天气实体要使用的新都道府县。",
+        "data": {
+          "prefecture": "都道府县"
+        }
       }
     },
     "error": {
       "cannot_connect": "无法连接 Yahoo!日本天气。",
-      "no_locations": "该页面没有找到可选择的天气地区。"
+      "no_locations": "该页面没有找到可选择的天气地区。",
+      "location_in_use": "所选市区町村已被另一个配置项使用。"
     },
     "abort": {
-      "already_configured": "该 Yahoo!日本天气地区已经配置。"
+      "already_configured": "该 Yahoo!日本天气地区已经配置。",
+      "reconfigure_successful": "天气地区已成功更新。"
     }
   },
   "entity": {
