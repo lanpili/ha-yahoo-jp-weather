@@ -20,9 +20,13 @@ from custom_components.yahoo_jp_weather.coordinator import YahooJapanWeatherCoor
 from custom_components.yahoo_jp_weather.diagnostics import (
     async_get_config_entry_diagnostics,
 )
-from tests.helpers import weather_html
+from tests.helpers import weather_api_json
 
 URL = "https://weather.yahoo.co.jp/weather/jp/13/4410/13123.html"
+API_URL = (
+    "https://weather.yahooapis.jp/Weather/V1/getCityDays?"
+    "date=week&hours=onehourand3&jis=13123&output=json&precipdecimal=1&v=2"
+)
 
 
 def make_entry(*, version: int = 1) -> MockConfigEntry:
@@ -45,7 +49,7 @@ async def test_setup_and_unload_use_config_entry_runtime_data(
 ) -> None:
     entry = make_entry()
     entry.add_to_hass(hass)
-    aioclient_mock.get(URL, text=weather_html())
+    aioclient_mock.get(API_URL, text=weather_api_json())
 
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -55,7 +59,7 @@ async def test_setup_and_unload_use_config_entry_runtime_data(
     assert len(weather_states) == 1
     entity_id = weather_states[0].entity_id
     assert "source_url" not in weather_states[0].attributes
-    assert weather_states[0].attributes["forecast_interval_hours"] == 3
+    assert weather_states[0].attributes["forecast_interval_hours"] == 1
 
     hourly = await hass.services.async_call(
         "weather",
@@ -85,7 +89,7 @@ async def test_first_refresh_failure_schedules_retry_without_stale_state(
 ) -> None:
     entry = make_entry(version=2)
     entry.add_to_hass(hass)
-    aioclient_mock.get(URL, status=503)
+    aioclient_mock.get(API_URL, status=503)
 
     assert not await hass.config_entries.async_setup(entry.entry_id)
 
@@ -100,7 +104,7 @@ async def test_platform_setup_failure_clears_runtime_data(
 ) -> None:
     entry = make_entry()
     entry.add_to_hass(hass)
-    aioclient_mock.get(URL, text=weather_html())
+    aioclient_mock.get(API_URL, text=weather_api_json())
 
     with patch.object(
         hass.config_entries,
@@ -143,7 +147,7 @@ async def test_diagnostics_are_useful_and_redacted(
 ) -> None:
     entry = make_entry(version=2)
     entry.add_to_hass(hass)
-    aioclient_mock.get(URL, text=weather_html())
+    aioclient_mock.get(API_URL, text=weather_api_json())
     assert await hass.config_entries.async_setup(entry.entry_id)
 
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)

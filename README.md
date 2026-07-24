@@ -2,18 +2,19 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-An unofficial Home Assistant custom integration that reads municipal forecasts from [Yahoo!天気・災害](https://weather.yahoo.co.jp/weather/).
+An unofficial Home Assistant custom integration that reads municipal forecasts from [Yahoo!天気・災害](https://weather.yahoo.co.jp/weather/) and Yahoo's one-hour App forecast feed.
 
-> This project is not affiliated with or endorsed by Yahoo Japan Corporation. It parses public web pages rather than an official API, so upstream HTML changes may require an integration update.
+> This project is not affiliated with or endorsed by Yahoo Japan Corporation. Yahoo does not provide an official public API for this use case. The integration uses public location pages and an endpoint used by the Yahoo weather app, so upstream changes may require an integration update.
 
 ## Features
 
 - Guided location setup: **prefecture → forecast area → municipality**
 - Reconfigure the location later without changing the existing weather entity ID
 - No API key required
-- Current condition based on the nearest Yahoo three-hour forecast slot
-- Three-hour forecasts with temperature, humidity, precipitation, wind direction, and wind speed
-- Eight-day daily forecast with high/low temperature and precipitation probability
+- Current condition based on the nearest Yahoo one-hour forecast slot
+- True one-hour forecasts with temperature, precipitation probability, humidity, precipitation, wind direction, and wind speed
+- Up to ten-day daily forecast with high/low temperature and precipitation probability
+- Optional adaptive dashboard enhancement with Yahoo-style hourly details
 - Home Assistant standard weather conditions
 - English, Japanese, and Simplified Chinese UI translations
 - 30-minute polling interval
@@ -50,6 +51,29 @@ into:
 
 Then restart Home Assistant.
 
+### Optional adaptive dashboard enhancement
+
+The integration works with Home Assistant's standard weather cards without this optional file. To add height-aware hourly details to a standard `weather-forecast` card:
+
+1. Copy [`dashboard/yahoo-weather-card.js`](dashboard/yahoo-weather-card.js) to:
+   ```text
+   /config/www/yahoo-weather-card.js
+   ```
+2. Add a JavaScript module resource in **Settings → Dashboards → Resources**:
+   ```text
+   /local/yahoo-weather-card.js?v=2.2.1
+   ```
+3. Reload the frontend or fully restart the Home Assistant app.
+
+Continue using the standard weather forecast card. The resource recognizes Yahoo weather entities by their attribution and adapts hourly content to the section-grid height:
+
+- 3 rows: time, icon, and temperature
+- 4 rows: adds precipitation probability
+- 5 rows: adds precipitation amount and humidity
+- 6 or more rows: adds Yahoo-style wind direction, arrow, and speed
+
+At least six hourly columns remain visible on a 390 px-wide mobile layout. Chinese, Japanese, and English use the same layout and automatically follow Home Assistant's active interface language. Tapping any non-dragged part of the card opens weather details; horizontal forecast dragging remains available. This optional enhancement relies on Home Assistant frontend internals and may require an update after a frontend redesign. HACS installs the integration only; it does not install this optional dashboard resource.
+
 ## Configuration
 
 1. Go to **Settings → Devices & services**.
@@ -65,29 +89,29 @@ To change an existing location, open the integration's config-entry menu and sel
 
 | Data | Availability |
 |---|---|
-| Condition and temperature | Current nearest 3-hour forecast |
-| Hourly forecast | Yahoo 3-hour forecast, exposed as HA hourly forecast |
-| Daily forecast | Today, tomorrow, and Yahoo weekly forecast (up to 8 days) |
-| Humidity | 3-hour forecast |
-| Precipitation | 3-hour amount; daily probability where published |
-| Wind | Direction and speed from the 3-hour forecast |
+| Condition and temperature | Current nearest one-hour forecast |
+| Hourly forecast | Yahoo App one-hour forecast |
+| Daily forecast | Yahoo App daily forecast (up to 10 days) |
+| Humidity | One-hour forecast |
+| Precipitation | One-hour amount and probability; daily probability where published |
+| Wind | Direction and speed from the one-hour forecast |
 
 The “current” temperature is forecast data, not a local weather-station observation.
 
 ## Limitations
 
-- Yahoo! JAPAN does not provide an official public API for this use case.
-- The integration depends on the current HTML structure of Yahoo!天気・災害.
+- Yahoo! JAPAN does not provide an official public API for this use case. The bundled App client identifier is not a user API key.
+- The integration depends on Yahoo's current location-page structure and App forecast response format.
 - Do not reduce the 30-minute polling interval.
 - Weather descriptions and municipality names are provided by Yahoo in Japanese; standard HA weather states are localized by Home Assistant.
 
 ## Reliability, security, and privacy
 
 - A new or reconfigured municipality is fetched and parsed **before** the config entry is saved. If validation fails, the existing location remains unchanged.
-- Legacy URLs, discovered links, and final weather pages are restricted to HTTPS municipality pages on `weather.yahoo.co.jp`. Cross-site redirects are rejected.
-- The parser rejects missing or stale publication timestamps, expired forecasts, unusable forecast tables, and implausible numeric values.
-- Yahoo can observe your public IP address, selected municipality page, request time, and the integration User-Agent when Home Assistant polls every 30 minutes.
-- Downloaded HTML is not stored. Home Assistant diagnostics omit the municipality name, source URL, and forecast contents.
+- Legacy URLs, discovered links, and final location pages are restricted to HTTPS municipality pages on `weather.yahoo.co.jp`. Cross-site redirects are rejected.
+- The parsers reject missing or stale publication timestamps, expired forecasts, unusable responses, and implausible numeric values.
+- Yahoo can observe your public IP address, selected municipality code, request time, and the integration User-Agent when Home Assistant polls every 30 minutes.
+- Downloaded HTML and forecast responses are not stored. Home Assistant diagnostics omit the municipality name, source URL, and forecast contents.
 
 ## Troubleshooting
 
