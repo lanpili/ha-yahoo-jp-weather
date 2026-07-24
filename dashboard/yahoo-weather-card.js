@@ -1,4 +1,4 @@
-// Yahoo! Japan Weather optional dashboard enhancement v2.2.0
+// Yahoo! Japan Weather optional dashboard enhancement v2.2.1
 const YAHOO_TRANSLATIONS = {
   zh: {
     locale: "zh-CN", defaultTitle: "Yahoo! JAPAN 天气", close: "关闭",
@@ -394,8 +394,8 @@ function isYahooWeatherDialog(dialog) {
 
 function yahooTabKind(tab) {
   const label = tab?.textContent?.trim();
-  const hourly = ["每小时", "Hourly", "1時間ごと", "毎時", "時間ごと"];
-  const daily = ["每日", "Daily", "毎日", "日ごと", "日別"];
+  const hourly = ["每小时", "Hourly", "時間別", "1時間ごと", "毎時", "時間ごと"];
+  const daily = ["每日", "Daily", "週間", "毎日", "日ごと", "日別"];
   return hourly.includes(label) ? "hourly" : daily.includes(label) ? "daily" : null;
 }
 

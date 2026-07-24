@@ -61,7 +61,7 @@ custom_components/yahoo_jp_weather
    ```
 2. 在“**设置 → 仪表板 → 资源**”中添加 JavaScript 模块资源：
    ```text
-   /local/yahoo-weather-card.js?v=2.2.0
+   /local/yahoo-weather-card.js?v=2.2.1
    ```
 3. 重新加载前端，或彻底退出并重新打开 Home Assistant App。
 
