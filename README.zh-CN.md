@@ -59,11 +59,15 @@ custom_components/yahoo_jp_weather
    ```text
    /config/www/yahoo-weather-card.js
    ```
-2. 在“**设置 → 仪表板 → 资源**”中添加 JavaScript 模块资源：
+2. 将整个 [`dashboard/yahoo-weather-card-i18n`](dashboard/yahoo-weather-card-i18n) 目录复制到：
    ```text
-   /local/yahoo-weather-card.js?v=2.2.2
+   /config/www/yahoo-weather-card-i18n/
    ```
-3. 重新加载前端，或彻底退出并重新打开 Home Assistant App。
+3. 在“**设置 → 仪表板 → 资源**”中添加 JavaScript 模块资源：
+   ```text
+   /local/yahoo-weather-card.js?v=2.3.0
+   ```
+4. 重新加载前端，或彻底退出并重新打开 Home Assistant App。
 
 继续使用 HA 原生天气预报卡即可。该资源会根据 Yahoo 实体的署名自动识别，并按照分区网格高度显示：
 
@@ -73,6 +77,8 @@ custom_components/yahoo_jp_weather
 - 6 格及以上：增加 Yahoo 风向箭头、风向和风速
 
 在 390px 宽的手机布局中至少完整显示 6 个小时。中文、日文和英文保持相同布局，并自动跟随 Home Assistant 当前界面语言切换。轻点卡片任意非拖动区域均可打开天气详情，同时保留横向拖动预报。此可选增强依赖 HA 前端内部结构，HA 大幅改版后可能需要更新。HACS 只安装集成本体，不会自动安装这个可选仪表板资源。
+
+翻译使用独立JSON语言包。增加语言时只需复制`en.json`，翻译全部值，在`tabAliases`中填写HA原生的小时/每日标签，保留16个风向，并以小写基础语言代码命名（例如`fr.json`）。无需修改主JavaScript程序。
 
 ## 配置
 

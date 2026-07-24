@@ -1,73 +1,107 @@
-// Yahoo! Japan Weather optional dashboard enhancement v2.2.2
-const YAHOO_TRANSLATIONS = {
-  zh: {
-    locale: "zh-CN", defaultTitle: "Yahoo! JAPAN 天气", close: "关闭",
-    forecastType: "天气预报类型", hourly: "每小时", daily: "每日",
-    loadingHourly: "正在读取每小时预报…", loadingDaily: "正在读取每日预报…",
-    entityRequired: "请设置天气实体", openDetails: "打开天气详情",
-    noForecast: "HA 没有返回预报数据", loadFailed: "读取预报失败",
-    dragHint: "左右滑动或用鼠标拖动可查看之后的预报", rain: "降雨",
-    temperature: "气温", probability: "降水概率", precipitation: "降水量",
-    humidity: "湿度", windDirection: "风向", windSpeed: "风速",
-    wind: "风向风速", calm: "静风", sunrise: "日出", sunset: "日落",
-    unknown: "不明",
-    conditions: {
-      "clear-night": "晴夜", cloudy: "多云", fog: "雾", hail: "冰雹",
-      lightning: "雷电", "lightning-rainy": "雷雨", partlycloudy: "晴间多云",
-      pouring: "大雨", rainy: "雨", snowy: "雪", "snowy-rainy": "雨夹雪",
-      sunny: "晴", windy: "有风", "windy-variant": "多云有风",
-    },
-    directions: ["北", "北北东", "东北", "东北东", "东", "东东南", "东南", "南东南", "南", "南西南", "西南", "西西南", "西", "西西北", "西北", "北西北"],
-  },
-  ja: {
-    locale: "ja-JP", defaultTitle: "Yahoo! JAPAN 天気", close: "閉じる",
-    forecastType: "天気予報の種類", hourly: "1時間ごと", daily: "週間天気",
-    loadingHourly: "1時間ごとの予報を読み込んでいます…",
-    loadingDaily: "毎日の予報を読み込んでいます…",
-    entityRequired: "天気エンティティを設定してください", openDetails: "天気の詳細を開く",
-    noForecast: "Home Assistantから予報データが返されませんでした",
-    loadFailed: "予報の読み込みに失敗しました",
-    dragHint: "左右にスワイプまたはドラッグして今後の予報を表示",
-    rain: "降水", temperature: "気温", probability: "降水確率",
-    precipitation: "降水量", humidity: "湿度", windDirection: "風向",
-    windSpeed: "風速", wind: "風向・風速", calm: "静穏",
-    sunrise: "日の出", sunset: "日の入り", unknown: "不明",
-    conditions: {
-      "clear-night": "晴れ（夜）", cloudy: "曇り", fog: "霧", hail: "ひょう",
-      lightning: "雷", "lightning-rainy": "雷雨", partlycloudy: "晴れ時々曇り",
-      pouring: "大雨", rainy: "雨", snowy: "雪", "snowy-rainy": "みぞれ",
-      sunny: "晴れ", windy: "強風", "windy-variant": "曇り時々強風",
-    },
-    directions: ["北", "北北東", "北東", "東北東", "東", "東南東", "南東", "南南東", "南", "南南西", "南西", "西南西", "西", "西北西", "北西", "北北西"],
-  },
-  en: {
-    locale: "en-US", defaultTitle: "Yahoo! JAPAN Weather", close: "Close",
-    forecastType: "Forecast type", hourly: "Hourly", daily: "Daily",
-    loadingHourly: "Loading hourly forecast…", loadingDaily: "Loading daily forecast…",
-    entityRequired: "Set a weather entity", openDetails: "Open weather details",
-    noForecast: "Home Assistant returned no forecast data",
-    loadFailed: "Failed to load forecast",
-    dragHint: "Swipe or drag horizontally to view later forecasts", rain: "Rain",
-    temperature: "Temp", probability: "Rain %", precipitation: "Rain",
-    humidity: "Humidity", windDirection: "Wind", windSpeed: "Speed",
-    wind: "Wind direction and speed", calm: "Calm",
-    sunrise: "Sunrise", sunset: "Sunset", unknown: "unknown",
-    conditions: {
-      "clear-night": "Clear night", cloudy: "Cloudy", fog: "Fog", hail: "Hail",
-      lightning: "Lightning", "lightning-rainy": "Thunderstorms",
-      partlycloudy: "Partly cloudy", pouring: "Pouring rain", rainy: "Rainy",
-      snowy: "Snowy", "snowy-rainy": "Sleet", sunny: "Sunny", windy: "Windy",
-      "windy-variant": "Cloudy and windy",
-    },
-    directions: ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"],
-  },
-};
+// Yahoo! Japan Weather optional dashboard enhancement v2.3.0
+const YAHOO_DEFAULT_LANGUAGE = "zh";
+const YAHOO_LANGUAGE_PACKS = new Map();
+const YAHOO_LANGUAGE_LOADS = new Map();
+const YAHOO_LANGUAGE_FAILURES = new Set();
+const YAHOO_LANGUAGE_EVENT = "yahoo-weather-language-loaded";
+const YAHOO_TRANSLATION_KEYS = [
+  "locale", "defaultTitle", "close", "forecastType", "hourly", "daily",
+  "loadingHourly", "loadingDaily", "entityRequired", "openDetails",
+  "noForecast", "loadFailed", "dragHint", "rain", "temperature",
+  "probability", "precipitation", "humidity", "windDirection", "windSpeed",
+  "wind", "calm", "sunrise", "sunset", "unknown",
+];
+
+function yahooLanguageCode(hass) {
+  const raw = String(
+    hass?.language || hass?.locale?.language || document.documentElement.lang ||
+      YAHOO_DEFAULT_LANGUAGE
+  ).toLowerCase();
+  const language = raw.split(/[-_]/, 1)[0];
+  return /^[a-z]{2,3}$/.test(language) ? language : YAHOO_DEFAULT_LANGUAGE;
+}
+
+function validateYahooLanguagePack(language, pack) {
+  if (!pack || typeof pack !== "object" || Array.isArray(pack)) {
+    throw new Error(`Invalid Yahoo weather language pack: ${language}`);
+  }
+  for (const key of YAHOO_TRANSLATION_KEYS) {
+    if (typeof pack[key] !== "string") {
+      throw new Error(`Missing string ${key} in Yahoo weather language pack: ${language}`);
+    }
+  }
+  if (!pack.conditions || typeof pack.conditions !== "object" || Array.isArray(pack.conditions)) {
+    throw new Error(`Invalid conditions in Yahoo weather language pack: ${language}`);
+  }
+  if (!pack.tabAliases || typeof pack.tabAliases !== "object" ||
+      !["hourly", "daily"].every((type) =>
+        Array.isArray(pack.tabAliases[type]) &&
+        pack.tabAliases[type].length > 0 &&
+        pack.tabAliases[type].every((label) => typeof label === "string")
+      )) {
+    throw new Error(`Invalid tab aliases in Yahoo weather language pack: ${language}`);
+  }
+  if (!Array.isArray(pack.directions) || pack.directions.length !== 16 ||
+      pack.directions.some((direction) => typeof direction !== "string")) {
+    throw new Error(`Yahoo weather language pack requires 16 directions: ${language}`);
+  }
+  return pack;
+}
+
+async function loadYahooLanguagePack(language) {
+  const safeLanguage = /^[a-z]{2,3}$/.test(language)
+    ? language
+    : YAHOO_DEFAULT_LANGUAGE;
+  if (YAHOO_LANGUAGE_PACKS.has(safeLanguage)) {
+    return YAHOO_LANGUAGE_PACKS.get(safeLanguage);
+  }
+  if (YAHOO_LANGUAGE_FAILURES.has(safeLanguage)) return null;
+  if (YAHOO_LANGUAGE_LOADS.has(safeLanguage)) {
+    return YAHOO_LANGUAGE_LOADS.get(safeLanguage);
+  }
+  const request = fetch(
+    new URL(`./yahoo-weather-card-i18n/${safeLanguage}.json`, import.meta.url),
+    { cache: "no-cache" }
+  )
+    .then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    })
+    .then((pack) => {
+      const validated = validateYahooLanguagePack(safeLanguage, pack);
+      YAHOO_LANGUAGE_PACKS.set(safeLanguage, validated);
+      window.dispatchEvent(new CustomEvent(YAHOO_LANGUAGE_EVENT, {
+        detail: { language: safeLanguage },
+      }));
+      return validated;
+    })
+    .catch((error) => {
+      YAHOO_LANGUAGE_FAILURES.add(safeLanguage);
+      console.warn(`Yahoo weather language pack ${safeLanguage} was not loaded`, error);
+      return null;
+    })
+    .finally(() => YAHOO_LANGUAGE_LOADS.delete(safeLanguage));
+  YAHOO_LANGUAGE_LOADS.set(safeLanguage, request);
+  return request;
+}
+
+const yahooDefaultTranslation = await loadYahooLanguagePack(YAHOO_DEFAULT_LANGUAGE);
+if (!yahooDefaultTranslation) {
+  throw new Error("Yahoo weather default language pack could not be loaded");
+}
+const yahooInitialLanguage = yahooLanguageCode(
+  document.querySelector("home-assistant")?.hass
+);
+if (yahooInitialLanguage !== YAHOO_DEFAULT_LANGUAGE) {
+  await loadYahooLanguagePack(yahooInitialLanguage);
+}
 
 function yahooTranslation(hass) {
-  const language = String(
-    hass?.language || hass?.locale?.language || document.documentElement.lang || "zh"
-  ).toLowerCase();
-  return YAHOO_TRANSLATIONS[language.startsWith("ja") ? "ja" : language.startsWith("en") ? "en" : "zh"];
+  const language = yahooLanguageCode(hass);
+  if (!YAHOO_LANGUAGE_PACKS.has(language) && !YAHOO_LANGUAGE_FAILURES.has(language)) {
+    void loadYahooLanguagePack(language);
+  }
+  return YAHOO_LANGUAGE_PACKS.get(language) || yahooDefaultTranslation;
 }
 
 function currentYahooTranslation() {
@@ -84,6 +118,9 @@ class YahooWeatherDialog extends HTMLElement {
     this._onKeyDown = (event) => {
       if (event.key === "Escape") this.close();
     };
+    this._onLanguageLoaded = () => {
+      if (this.isConnected && this._hass) this._render();
+    };
   }
 
   setData(hass, config) {
@@ -94,10 +131,12 @@ class YahooWeatherDialog extends HTMLElement {
 
   connectedCallback() {
     window.addEventListener("keydown", this._onKeyDown);
+    window.addEventListener(YAHOO_LANGUAGE_EVENT, this._onLanguageLoaded);
   }
 
   disconnectedCallback() {
     window.removeEventListener("keydown", this._onKeyDown);
+    window.removeEventListener(YAHOO_LANGUAGE_EVENT, this._onLanguageLoaded);
   }
 
   close() {
@@ -155,10 +194,10 @@ class YahooWeatherDialog extends HTMLElement {
             <button class="close" aria-label="${text.close}">×</button>
           </header>
           <nav class="tabs" aria-label="${text.forecastType}">
-            <button class="tab active" data-type="hourly">${text.hourly}</button>
-            <button class="tab" data-type="daily">${text.daily}</button>
+            <button class="tab${this._active === "hourly" ? " active" : ""}" data-type="hourly">${text.hourly}</button>
+            <button class="tab${this._active === "daily" ? " active" : ""}" data-type="daily">${text.daily}</button>
           </nav>
-          <main class="content"><div class="loading">${text.loadingHourly}</div></main>
+          <main class="content"><div class="loading">${this._active === "hourly" ? text.loadingHourly : text.loadingDaily}</div></main>
         </section>
       </div>`;
     this.shadowRoot.querySelector(".title").textContent = title;
@@ -169,7 +208,7 @@ class YahooWeatherDialog extends HTMLElement {
     for (const button of this.shadowRoot.querySelectorAll(".tab")) {
       button.addEventListener("click", () => this._select(button.dataset.type));
     }
-    this._loadForecast("hourly");
+    this._loadForecast(this._active);
   }
 
   _select(type) {
@@ -305,6 +344,19 @@ class YahooWeatherCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this._onLanguageLoaded = () => {
+      this.shadowRoot.querySelector(".wrapper")?.setAttribute(
+        "aria-label", yahooTranslation(this._hass).openDetails
+      );
+    };
+  }
+
+  connectedCallback() {
+    window.addEventListener(YAHOO_LANGUAGE_EVENT, this._onLanguageLoaded);
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener(YAHOO_LANGUAGE_EVENT, this._onLanguageLoaded);
   }
 
   static getStubConfig() {
@@ -394,9 +446,11 @@ function isYahooWeatherDialog(dialog) {
 
 function yahooTabKind(tab) {
   const label = tab?.textContent?.trim();
-  const hourly = ["每小时", "Hourly", "時間別", "1時間ごと", "毎時", "時間ごと"];
-  const daily = ["每日", "Daily", "週間天気", "週間", "毎日", "日ごと", "日別"];
-  return hourly.includes(label) ? "hourly" : daily.includes(label) ? "daily" : null;
+  for (const pack of YAHOO_LANGUAGE_PACKS.values()) {
+    if (pack.tabAliases.hourly.includes(label)) return "hourly";
+    if (pack.tabAliases.daily.includes(label)) return "daily";
+  }
+  return null;
 }
 
 function cleanupNativeWeatherDialog(dialog) {
