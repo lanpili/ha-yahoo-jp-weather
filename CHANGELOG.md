@@ -6,7 +6,7 @@
 - Add hourly precipitation probability, one-hour temperatures, humidity, precipitation, wind speed, and wind direction.
 - Map Yahoo thunderstorm weather codes to Home Assistant's `lightning-rainy` condition, including code 54 hourly and code 240 daily forecasts.
 - Expose the forecast interval as one hour while retaining daily precipitation probability.
-- Include the optional `dashboard/yahoo-weather-card.js` v2.2.1 enhancement with height-aware hourly details, full-card tap handling that preserves horizontal dragging, Chinese/Japanese/English language following, and identical hourly-first tab order in all three languages.
+- Include the optional `dashboard/yahoo-weather-card.js` v2.2.2 enhancement with height-aware hourly details, full-card tap handling that preserves horizontal dragging, Chinese/Japanese/English language following, identical hourly-first tab order, and Japanese labels matching Yahoo!天気 (`1時間ごと` / `週間天気`).
 - Extend the scheduled live probe to cover both Yahoo location pages and the App forecast feed.
 - Enforce the one-hour expiry cutoff, reject malformed or timezone-ambiguous App responses, and cap daily forecasts at 10 entries.
 - Scope native weather-dialog enhancements strictly to Yahoo-attributed entities.

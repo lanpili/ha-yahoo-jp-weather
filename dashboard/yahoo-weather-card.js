@@ -1,4 +1,4 @@
-// Yahoo! Japan Weather optional dashboard enhancement v2.2.1
+// Yahoo! Japan Weather optional dashboard enhancement v2.2.2
 const YAHOO_TRANSLATIONS = {
   zh: {
     locale: "zh-CN", defaultTitle: "Yahoo! JAPAN 天气", close: "关闭",
@@ -21,7 +21,7 @@ const YAHOO_TRANSLATIONS = {
   },
   ja: {
     locale: "ja-JP", defaultTitle: "Yahoo! JAPAN 天気", close: "閉じる",
-    forecastType: "天気予報の種類", hourly: "1時間ごと", daily: "毎日",
+    forecastType: "天気予報の種類", hourly: "1時間ごと", daily: "週間天気",
     loadingHourly: "1時間ごとの予報を読み込んでいます…",
     loadingDaily: "毎日の予報を読み込んでいます…",
     entityRequired: "天気エンティティを設定してください", openDetails: "天気の詳細を開く",
@@ -395,7 +395,7 @@ function isYahooWeatherDialog(dialog) {
 function yahooTabKind(tab) {
   const label = tab?.textContent?.trim();
   const hourly = ["每小时", "Hourly", "時間別", "1時間ごと", "毎時", "時間ごと"];
-  const daily = ["每日", "Daily", "週間", "毎日", "日ごと", "日別"];
+  const daily = ["每日", "Daily", "週間天気", "週間", "毎日", "日ごと", "日別"];
   return hourly.includes(label) ? "hourly" : daily.includes(label) ? "daily" : null;
 }
 
@@ -419,6 +419,10 @@ function cleanupNativeWeatherDialog(dialog) {
     for (const tab of [daily, hourly]) {
       for (const property of ["position", "z-index", "min-height", "touch-action"]) {
         tab.style.removeProperty(property);
+      }
+      if (Object.hasOwn(tab, "__yahooOriginalText")) {
+        tab.textContent = tab.__yahooOriginalText;
+        delete tab.__yahooOriginalText;
       }
     }
   }
@@ -447,6 +451,17 @@ function reorderNativeWeatherTabs(roots = collectYahooWeatherRoots()) {
       daily.compareDocumentPosition(hourly) & Node.DOCUMENT_POSITION_FOLLOWING
     );
     if (dailyBeforeHourly) daily.parentElement.insertBefore(hourly, daily);
+
+    const translatedTabs = currentYahooTranslation();
+    for (const [tab, label] of [
+      [hourly, translatedTabs.hourly],
+      [daily, translatedTabs.daily],
+    ]) {
+      if (!Object.hasOwn(tab, "__yahooOriginalText")) {
+        tab.__yahooOriginalText = tab.textContent;
+      }
+      if (tab.textContent !== label) tab.textContent = label;
+    }
 
     const tabGroup = daily.parentElement;
     tabGroup.style.position = "relative";
