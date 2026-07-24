@@ -8,9 +8,13 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 
 from custom_components.yahoo_jp_weather.const import CONF_NAME, DOMAIN
 from custom_components.yahoo_jp_weather.coordinator import YahooJapanWeatherCoordinator
-from tests.helpers import weather_html
+from tests.helpers import weather_api_json
 
 URL = "https://weather.yahoo.co.jp/weather/jp/13/4410/13123.html"
+API_URL = (
+    "https://weather.yahooapis.jp/Weather/V1/getCityDays?"
+    "date=week&hours=onehourand3&jis=13123&output=json&precipdecimal=1&v=2"
+)
 
 
 def test_coordinator_explicitly_owns_config_entry(hass: HomeAssistant) -> None:
@@ -26,6 +30,7 @@ def test_coordinator_explicitly_owns_config_entry(hass: HomeAssistant) -> None:
 
     assert coordinator.config_entry is entry
     assert coordinator.url == URL
+    assert coordinator.api_url == API_URL
 
 
 @pytest.mark.asyncio
@@ -39,7 +44,7 @@ async def test_coordinator_fetches_and_parses_weather(
         data={CONF_NAME: "江戸川区", "url": URL, "entity_unique_id": "13123"},
     )
     entry.add_to_hass(hass)
-    aioclient_mock.get(URL, text=weather_html())
+    aioclient_mock.get(API_URL, text=weather_api_json())
     coordinator = YahooJapanWeatherCoordinator(hass, entry)
 
     data = await coordinator._async_update_data()
@@ -62,8 +67,8 @@ async def test_coordinator_rejects_cross_host_redirect(
     )
     entry.add_to_hass(hass)
     redirected = "https://example.com/weather.html"
-    aioclient_mock.get(URL, status=302, headers={"Location": redirected})
-    aioclient_mock.get(redirected, text=weather_html())
+    aioclient_mock.get(API_URL, status=302, headers={"Location": redirected})
+    aioclient_mock.get(redirected, text=weather_api_json())
     coordinator = YahooJapanWeatherCoordinator(hass, entry)
 
     with pytest.raises(UpdateFailed, match="redirect"):
@@ -82,7 +87,7 @@ async def test_coordinator_classifies_http_failure(
         data={CONF_NAME: "江戸川区", "url": URL, "entity_unique_id": "13123"},
     )
     entry.add_to_hass(hass)
-    aioclient_mock.get(URL, status=503)
+    aioclient_mock.get(API_URL, status=503)
     coordinator = YahooJapanWeatherCoordinator(hass, entry)
 
     with pytest.raises(UpdateFailed, match="503"):
@@ -101,7 +106,7 @@ async def test_coordinator_classifies_rate_limit(
         data={CONF_NAME: "江戸川区", "url": URL, "entity_unique_id": "13123"},
     )
     entry.add_to_hass(hass)
-    aioclient_mock.get(URL, status=429)
+    aioclient_mock.get(API_URL, status=429)
     coordinator = YahooJapanWeatherCoordinator(hass, entry)
 
     with pytest.raises(UpdateFailed, match="429"):
@@ -122,13 +127,13 @@ async def test_coordinator_classifies_timeout_and_parse_failure(
     entry.add_to_hass(hass)
     coordinator = YahooJapanWeatherCoordinator(hass, entry)
 
-    aioclient_mock.get(URL, exc=TimeoutError())
+    aioclient_mock.get(API_URL, exc=TimeoutError())
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
     assert coordinator.last_error_category == "timeout"
 
     aioclient_mock.clear_requests()
-    aioclient_mock.get(URL, text="<html>invalid</html>")
+    aioclient_mock.get(API_URL, text="<html>invalid</html>")
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
     assert coordinator.last_error_category == "parse"
@@ -146,13 +151,13 @@ async def test_coordinator_clears_error_after_recovery(
     )
     entry.add_to_hass(hass)
     coordinator = YahooJapanWeatherCoordinator(hass, entry)
-    aioclient_mock.get(URL, status=503)
-    aioclient_mock.get(URL, text=weather_html())
+    aioclient_mock.get(API_URL, status=503)
+    aioclient_mock.get(API_URL, text=weather_api_json())
 
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
     aioclient_mock.clear_requests()
-    aioclient_mock.get(URL, text=weather_html())
+    aioclient_mock.get(API_URL, text=weather_api_json())
     data = await coordinator._async_update_data()
 
     assert data.hourly

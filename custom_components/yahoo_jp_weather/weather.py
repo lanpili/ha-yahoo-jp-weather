@@ -90,7 +90,7 @@ class YahooJapanWeatherEntity(
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "published_at": self.coordinator.data.published_at,
-            "forecast_interval_hours": 3,
+            "forecast_interval_hours": 1,
         }
 
     @callback

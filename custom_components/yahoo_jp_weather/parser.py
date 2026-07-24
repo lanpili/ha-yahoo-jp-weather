@@ -33,7 +33,7 @@ WIND_BEARINGS = {
 
 @dataclass(frozen=True, slots=True)
 class HourlyForecast:
-    """One Yahoo three-hour forecast slot."""
+    """One Yahoo hourly forecast slot."""
 
     datetime: str
     condition: str | None
@@ -42,11 +42,12 @@ class HourlyForecast:
     precipitation: float | None
     wind_bearing: float | None
     wind_speed: float | None
+    precipitation_probability: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class DailyForecast:
-    """Daily values derived from Yahoo three-hour slots."""
+    """Daily values derived from Yahoo forecast slots."""
 
     datetime: str
     condition: str | None
@@ -87,9 +88,14 @@ VOID_ELEMENTS = {
 IGNORED_ELEMENTS = {"script", "style", "template", "noscript"}
 
 
-def map_condition(text: str) -> str | None:
+def map_condition(text: str, weather_code: str | int | None = None) -> str | None:
     """Map Japanese Yahoo weather wording to a Home Assistant condition."""
     normalized = text.replace(" ", "").replace("　", "")
+    # Yahoo's App API can encode thunder in the weather code while leaving the
+    # telop as plain "雨". 54 is the hourly thunder-rain icon and 240 is the
+    # corresponding daily cloudy/rain/thunder icon.
+    if str(weather_code) in {"54", "240"}:
+        return "lightning-rainy"
     if "雷" in normalized:
         return "lightning-rainy" if "雨" in normalized else "lightning"
     if "雹" in normalized or "ひょう" in normalized:

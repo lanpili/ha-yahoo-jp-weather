@@ -27,13 +27,17 @@ class _Opener:
 
 class LiveProbeTests(unittest.TestCase):
     def test_rejects_changed_final_url(self) -> None:
-        fetch_html: Any = getattr(live_probe, "fetch_html", None)
-        self.assertIsNotNone(
-            fetch_html, "live probe must expose fail-closed fetch_html"
-        )
+        for function_name in ("fetch_html", "fetch_api"):
+            fetch: Any = getattr(live_probe, function_name, None)
+            self.assertIsNotNone(
+                fetch, f"live probe must expose fail-closed {function_name}"
+            )
 
-        with self.assertRaisesRegex(RuntimeError, "redirect"):
-            fetch_html(opener=_Opener())
+            with (
+                self.subTest(function_name=function_name),
+                self.assertRaisesRegex(RuntimeError, "redirect"),
+            ):
+                fetch(opener=_Opener())
 
 
 if __name__ == "__main__":

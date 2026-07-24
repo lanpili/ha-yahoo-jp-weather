@@ -15,6 +15,28 @@ from custom_components.yahoo_jp_weather.parser import (
 
 
 class HomeAssistantAdapterTests(unittest.TestCase):
+    def test_hourly_cutoff_keeps_only_current_one_hour_slot(self) -> None:
+        slots = [
+            HourlyForecast(
+                datetime=f"2026-07-22T{hour:02d}:00:00+09:00",
+                condition="sunny",
+                temperature=30.0,
+                humidity=None,
+                precipitation=None,
+                wind_bearing=None,
+                wind_speed=None,
+            )
+            for hour in (10, 11, 12, 13)
+        ]
+        now = datetime(2026, 7, 22, 12, 30, tzinfo=ZoneInfo("Asia/Tokyo"))
+
+        result = hourly_forecasts_for_ha(slots, now=now)
+
+        self.assertEqual(
+            [item["datetime"] for item in result],
+            [slots[2].datetime, slots[3].datetime],
+        )
+
     def test_filters_old_slots_and_keeps_native_values(self) -> None:
         slots = [
             HourlyForecast(
@@ -34,6 +56,7 @@ class HomeAssistantAdapterTests(unittest.TestCase):
                 precipitation=0.1,
                 wind_bearing=157.5,
                 wind_speed=4.0,
+                precipitation_probability=50.0,
             ),
             HourlyForecast(
                 datetime="2026-07-22T15:00:00+09:00",
@@ -54,6 +77,7 @@ class HomeAssistantAdapterTests(unittest.TestCase):
         self.assertEqual(result[0]["native_temperature"], 35.0)
         self.assertEqual(result[0]["humidity"], 68.0)
         self.assertEqual(result[0]["native_precipitation"], 0.1)
+        self.assertEqual(result[0]["precipitation_probability"], 50.0)
         self.assertEqual(result[0]["native_wind_speed"], 4.0)
 
     def test_converts_daily_native_values(self) -> None:

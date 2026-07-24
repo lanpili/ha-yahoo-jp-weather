@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -30,3 +31,46 @@ def weather_html(*, now: datetime | None = None, area: str = "江戸川区") -> 
       </div>
     </body></html>
     """
+
+
+def weather_api_json(*, now: datetime | None = None, area: str = "江戸川区") -> str:
+    """Return a small, current Yahoo App API response."""
+    current = (
+        (now or datetime.now(JST))
+        .astimezone(JST)
+        .replace(minute=0, second=0, microsecond=0)
+    )
+    return json.dumps(
+        {
+            "ResultSet": {
+                "Result": [
+                    {
+                        "JisCode": "13123",
+                        "JisName": area,
+                        "Day": [
+                            {
+                                "Date": current.date().isoformat(),
+                                "RefTime": current.isoformat(),
+                                "Weather": {"Code": "100", "Telop": "晴れ"},
+                                "Temp": {"Min": "22", "Max": "28"},
+                                "Precip": "10",
+                                "Hour": [
+                                    {
+                                        "Time": current.isoformat(),
+                                        "RefTime": current.isoformat(),
+                                        "Weather": {"Code": "11", "Telop": "晴れ"},
+                                        "Temp": "28",
+                                        "Humidity": "60",
+                                        "ProbPrecip": "10",
+                                        "Precip": {"0": "0", "@unit": "mm/h"},
+                                        "WindSpeed": {"0": "3", "@unit": "m/s"},
+                                        "WindDirection": {"Code": "7", "Name": "南"},
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ]
+            }
+        }
+    )

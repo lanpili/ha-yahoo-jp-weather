@@ -19,8 +19,8 @@ def _without_none(data: dict[str, Any]) -> Forecast:
 def hourly_forecasts_for_ha(
     forecasts: list[HourlyForecast], *, now: datetime
 ) -> list[Forecast]:
-    """Return active and future Yahoo three-hour slots in HA format."""
-    cutoff = now - timedelta(hours=3)
+    """Return active and future Yahoo one-hour slots in HA format."""
+    cutoff = now - timedelta(hours=1)
     return [
         _without_none(
             {
@@ -29,6 +29,7 @@ def hourly_forecasts_for_ha(
                 "native_temperature": item.temperature,
                 "humidity": item.humidity,
                 "native_precipitation": item.precipitation,
+                "precipitation_probability": item.precipitation_probability,
                 "wind_bearing": item.wind_bearing,
                 "native_wind_speed": item.wind_speed,
             }
