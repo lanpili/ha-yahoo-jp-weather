@@ -59,11 +59,15 @@ The integration works with Home Assistant's standard weather cards without this 
    ```text
    /config/www/yahoo-weather-card.js
    ```
-2. Add a JavaScript module resource in **Settings → Dashboards → Resources**:
+2. Copy the complete [`dashboard/yahoo-weather-card-i18n`](dashboard/yahoo-weather-card-i18n) directory to:
    ```text
-   /local/yahoo-weather-card.js?v=2.2.2
+   /config/www/yahoo-weather-card-i18n/
    ```
-3. Reload the frontend or fully restart the Home Assistant app.
+3. Add a JavaScript module resource in **Settings → Dashboards → Resources**:
+   ```text
+   /local/yahoo-weather-card.js?v=2.3.0
+   ```
+4. Reload the frontend or fully restart the Home Assistant app.
 
 Continue using the standard weather forecast card. The resource recognizes Yahoo weather entities by their attribution and adapts hourly content to the section-grid height:
 
@@ -73,6 +77,8 @@ Continue using the standard weather forecast card. The resource recognizes Yahoo
 - 6 or more rows: adds Yahoo-style wind direction, arrow, and speed
 
 At least six hourly columns remain visible on a 390 px-wide mobile layout. Chinese, Japanese, and English use the same layout and automatically follow Home Assistant's active interface language. Tapping any non-dragged part of the card opens weather details; horizontal forecast dragging remains available. This optional enhancement relies on Home Assistant frontend internals and may require an update after a frontend redesign. HACS installs the integration only; it does not install this optional dashboard resource.
+
+Translations are independent JSON language packs. To add a language, copy `en.json`, translate every value, include Home Assistant's native hourly/daily labels in `tabAliases`, keep exactly 16 compass directions, and save it as the lowercase base language code such as `fr.json`. The main JavaScript does not need to be changed.
 
 ## Configuration
 
