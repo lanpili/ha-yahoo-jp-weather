@@ -61,7 +61,7 @@ The integration works with Home Assistant's standard weather cards without this 
    ```
 2. Add a JavaScript module resource in **Settings → Dashboards → Resources**:
    ```text
-   /local/yahoo-weather-card.js?v=2.2.1
+   /local/yahoo-weather-card.js?v=2.2.2
    ```
 3. Reload the frontend or fully restart the Home Assistant app.
 

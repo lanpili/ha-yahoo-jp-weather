@@ -59,7 +59,7 @@ custom_components/yahoo_jp_weather
    ```
 2. 「**設定 → ダッシュボード → リソース**」にJavaScriptモジュールを追加します。
    ```text
-   /local/yahoo-weather-card.js?v=2.2.1
+   /local/yahoo-weather-card.js?v=2.2.2
    ```
 3. フロントエンドを再読み込みするか、Home Assistantアプリを完全に終了して開き直します。
 
